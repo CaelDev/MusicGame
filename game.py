@@ -51,8 +51,8 @@ def game(dataType, albumURL, choicesPerQuestion, extra=[]):
     return f"Score: {score} (incorrect: {incorrect})"
 
 
-def gameSetup():
-    dataTypes = [
+def getTypesRoutes():
+    return [
         "Song Name",
         "Album Cover",
         "Album Name",
@@ -61,8 +61,7 @@ def gameSetup():
         "Song Length",
         "Audio Sample",
         "Lyrics",
-    ]
-    dataRoutes = [
+    ], [
         "track;name",
         "track;album;images;0;url",
         "track;album;name",
@@ -72,6 +71,10 @@ def gameSetup():
         "track;preview_url",
         "NA RIGHT NOW",
     ]
+
+
+def gameSetup():
+    dataTypes, dataRoutes = getTypesRoutes()
     x = "Please enter the number for the question data type you want:\n"
     for i in range(len(dataTypes)):
         x += f"{i+1}.) {dataTypes[i]}\n"
