@@ -7,6 +7,8 @@ def ensureEnoughDifferentItems(itemType, differentItemsNeeded, data):
     for i in range(len(data)):
         found = data[i]
         for x in range(len(itemType)):
+            if itemType[x] == "0":
+                itemType[x] = 0
             found = found[itemType[x]]
         if found not in itemsFound:
             itemsFound.append(found)
