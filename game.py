@@ -63,7 +63,7 @@ def getTypesRoutes():
         "Lyrics",
     ], [
         "track;name",
-        "track;album;images;0;url",
+        "track;album;images;1;url",
         "track;album;name",
         "track;artists;0;name",
         "track;album;release_date",

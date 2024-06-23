@@ -1,5 +1,7 @@
 import wx
-import game, load, bugPrevention, random, time
+import game, load, bugPrevention, random, time, requests
+from io import BytesIO
+import wx.media
 
 options, techOpt = game.getTypesRoutes()
 
@@ -201,6 +203,8 @@ class MyFrame(wx.Frame):
             for x in range(len(self.dataType[1].split(";"))):
                 if (self.dataType[1].split(";"))[x] == "0":
                     p = p[0]
+                elif (self.dataType[1].split(";"))[x] == "1":
+                    p = p[1]
                 else:
                     p = p[(self.dataType[1].split(";"))[x]]
             self.display_question_and_options(p, options)
@@ -226,18 +230,37 @@ class MyFrame(wx.Frame):
         )
         self.incorrect_label.SetForegroundColour(wx.RED)
         label_sizer.Add(self.incorrect_label, 0, wx.ALL | wx.CENTER, 10)
-
         self.sizer.Add(label_sizer, 0, wx.CENTER)
 
-        self.sizer.Add(
-            wx.StaticText(self.panel, label=question), 0, wx.ALL | wx.CENTER, 10
-        )
+        if question.startswith("https://i.scdn.co"):
+            response = requests.get(question)
+            image_data = response.content
+
+            # Load the image data into a wx.Image object
+            self.image = wx.Image(BytesIO(image_data), wx.BITMAP_TYPE_ANY)
+
+            # Display the image using a StaticBitmap
+            self.bitmap = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.image))
+            self.sizer.Add(self.bitmap, 0, wx.CENTER | wx.ALL, 10)
+        else:
+            self.sizer.Add(
+                wx.StaticText(self.panel, label=question), 0, wx.ALL | wx.CENTER, 10
+            )
 
         self.option_buttons = []
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)  # New sizer for buttons
         for i, option in enumerate(options):
-            btn = wx.Button(self.panel, label=self.get_option_text(option))
-            btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
+            if self.get_option_text(option).startswith("https://i.scdn.co"):
+                response = requests.get(self.get_option_text(option))
+                image_data = response.content
+                image = wx.Image(BytesIO(image_data), wx.BITMAP_TYPE_ANY)
+                image = image.Scale(150, 150, wx.IMAGE_QUALITY_HIGH)
+                bitmap = wx.Bitmap(image)
+                btn = wx.StaticBitmap(self.panel, wx.ID_ANY, bitmap)
+                btn.Bind(wx.EVT_LEFT_DOWN, self.on_option_selected)
+            else:
+                btn = wx.Button(self.panel, label=self.get_option_text(option))
+                btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
             btn.option_index = i  # Store the index of the option in the button
             self.option_buttons.append(btn)
             button_sizer.Add(btn, 0, wx.ALL, 5)  # Add to the new sizer
@@ -252,6 +275,8 @@ class MyFrame(wx.Frame):
         for x in range(len(self.dataType[0].split(";"))):
             if (self.dataType[0].split(";"))[x] == "0":
                 o = o[0]
+            elif (self.dataType[0].split(";"))[x] == "1":
+                o = o[1]
             else:
                 o = o[(self.dataType[0].split(";"))[x]]
         return o
