@@ -2,6 +2,8 @@ import wx
 import game, load, bugPrevention, random, time, requests
 from io import BytesIO
 import wx.media
+from pydub import AudioSegment
+import simpleaudio as sa
 
 options, techOpt = game.getTypesRoutes()
 
@@ -22,6 +24,8 @@ class MyFrame(wx.Frame):
         self.panel.SetSizer(self.sizer)
 
         self.panel.SetBackgroundColour(wx.Colour(51, 161, 192))
+        self.media = wx.media.MediaCtrl(self.panel)
+
         self.SetBackgroundColour(wx.Colour(21, 76, 121))
 
         self.first_choice = None
@@ -33,6 +37,8 @@ class MyFrame(wx.Frame):
 
         self.score = 0
         self.incorrect = 0
+
+        self.audio_obj = None
 
         self.create_num_input()
         self.create_first_option_buttons()
@@ -216,6 +222,9 @@ class MyFrame(wx.Frame):
             )
 
     def display_question_and_options(self, question, options):
+        if self.audio_obj and self.audio_obj.is_playing():
+            self.audio_obj.stop()
+        self.audio_obj = None
         self.sizer.Clear(True)
 
         # Create a horizontal sizer for Correct and Incorrect labels
@@ -242,6 +251,16 @@ class MyFrame(wx.Frame):
             # Display the image using a StaticBitmap
             self.bitmap = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.image))
             self.sizer.Add(self.bitmap, 0, wx.CENTER | wx.ALL, 10)
+        elif question.startswith("https://p.scdn.co"):
+            response = requests.get(question)
+            if response.status_code == 200:
+                with open(f"q.mp3", "wb") as f:
+                    f.write(response.content)
+
+            self.ans = wx.Button(self.panel, label=f"Listen to question")
+            self.ans.Bind(wx.EVT_BUTTON, self.on_music_button_click)
+            self.ans.option_index = "q"
+            self.sizer.Add(self.ans, 0, wx.ALL | wx.CENTER, 10)
         else:
             self.sizer.Add(
                 wx.StaticText(self.panel, label=question), 0, wx.ALL | wx.CENTER, 10
@@ -258,17 +277,46 @@ class MyFrame(wx.Frame):
                 bitmap = wx.Bitmap(image)
                 btn = wx.StaticBitmap(self.panel, wx.ID_ANY, bitmap)
                 btn.Bind(wx.EVT_LEFT_DOWN, self.on_option_selected)
+            elif self.get_option_text(option).startswith("https://p.scdn.co"):
+                response = requests.get(self.get_option_text(option))
+                # Check if the request was successful (status code 200)
+                if response.status_code == 200:
+                    with open(f"song{i}.mp3", "wb") as f:
+                        f.write(response.content)
+                btn = wx.Button(self.panel, label=f"Pick #{i}")
+                btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
             else:
                 btn = wx.Button(self.panel, label=self.get_option_text(option))
                 btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
             btn.option_index = i  # Store the index of the option in the button
             self.option_buttons.append(btn)
             button_sizer.Add(btn, 0, wx.ALL, 5)  # Add to the new sizer
-        self.sizer.Add(
-            button_sizer, 0, wx.CENTER
-        )  # Add the new sizer to the main sizer
+        self.sizer.Add(button_sizer, 0, wx.CENTER)
+        if (self.get_option_text(options[0])).startswith("https://p.scdn.co"):
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            for i, option in enumerate(options):
+                btn = wx.Button(self.panel, label=f"Play #{i}")
+                btn.Bind(wx.EVT_BUTTON, self.on_music_button_click)
+                btn.option_index = i
+                button_sizer.Add(btn, 0, wx.ALL, 5)
+        self.sizer.Add(button_sizer, 0, wx.CENTER)
 
         self.panel.Layout()
+
+    def on_music_button_click(self, event):
+        if self.audio_obj and self.audio_obj.is_playing():
+            self.audio_obj.stop()
+        if (event.GetEventObject().option_index) == "q":
+            audio = AudioSegment.from_mp3(f"q.mp3")
+        else:
+            audio = AudioSegment.from_mp3(
+                f"song{event.GetEventObject().option_index}.mp3"
+            )
+        wave_obj = sa.WaveObject.from_wave_file(
+            audio.export(format="wav", codec="pcm_s16le")
+        )
+        self.audio_obj = wave_obj.play()
 
     def get_option_text(self, option):
         o = option
@@ -282,6 +330,8 @@ class MyFrame(wx.Frame):
         return o
 
     def on_option_selected(self, event):
+        if self.audio_obj and self.audio_obj.is_playing():
+            self.audio_obj.stop()
         selected_button = event.GetEventObject()
         selected_index = selected_button.option_index
         if selected_index == self.correct_index:
