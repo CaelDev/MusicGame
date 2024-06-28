@@ -1,11 +1,34 @@
 import wx
-import game, load, bugPrevention, random, time, requests
+import load, bugPrevention, random, time, requests, os, json
 from io import BytesIO
 import wx.media
 from pydub import AudioSegment
 import simpleaudio as sa
 
-options, techOpt = game.getTypesRoutes()
+
+def getTypesRoutes():
+    return [
+        "Song Name",
+        "Album Cover",
+        "Album Name",
+        "Author Name",
+        "Release Date",
+        "Song Length",
+        "Audio Sample",
+        "Lyrics",
+    ], [
+        "track;name",
+        "track;album;images;1;url",
+        "track;album;name",
+        "track;artists;0;name",
+        "track;album;release_date",
+        "track;duration_ms",
+        "track;preview_url",
+        "track;external_urls;spotify",
+    ]
+
+
+options, techOpt = getTypesRoutes()
 
 
 class MyApp(wx.App):
@@ -222,9 +245,6 @@ class MyFrame(wx.Frame):
             )
 
     def display_question_and_options(self, question, options):
-        if self.audio_obj and self.audio_obj.is_playing():
-            self.audio_obj.stop()
-        self.audio_obj = None
         self.sizer.Clear(True)
 
         # Create a horizontal sizer for Correct and Incorrect labels
@@ -254,13 +274,27 @@ class MyFrame(wx.Frame):
         elif question.startswith("https://p.scdn.co"):
             response = requests.get(question)
             if response.status_code == 200:
-                with open(f"q.mp3", "wb") as f:
+                with open(f"temp_files/q.mp3", "wb") as f:
                     f.write(response.content)
 
             self.ans = wx.Button(self.panel, label=f"Listen to question")
             self.ans.Bind(wx.EVT_BUTTON, self.on_music_button_click)
             self.ans.option_index = "q"
             self.sizer.Add(self.ans, 0, wx.ALL | wx.CENTER, 10)
+        elif question.startswith("https://open.spotify.com/"):
+            self.get_lyrics(self.get_option_text(question), 0)
+            string = ""
+            with open("temp_files/lyrics0.json") as l:
+                l = json.loads(l.read())
+
+            e = random.randint(0, len(l["lines"]) - 3)
+
+            for m in range(3):
+                string = string + l["lines"][str(e + m)]["words"] + "\n"
+
+            self.sizer.Add(
+                wx.StaticText(self.panel, label=string), 0, wx.ALL | wx.CENTER, 10
+            )
         else:
             self.sizer.Add(
                 wx.StaticText(self.panel, label=question), 0, wx.ALL | wx.CENTER, 10
@@ -281,9 +315,22 @@ class MyFrame(wx.Frame):
                 response = requests.get(self.get_option_text(option))
                 # Check if the request was successful (status code 200)
                 if response.status_code == 200:
-                    with open(f"song{i}.mp3", "wb") as f:
+                    with open(f"temp_files/song{i}.mp3", "wb") as f:
                         f.write(response.content)
                 btn = wx.Button(self.panel, label=f"Pick #{i}")
+                btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
+            elif self.get_option_text(option).startswith("https://open.spotify.com/"):
+                self.get_lyrics(self.get_option_text(option), i)
+                string = ""
+                with open(f"temp_files/lyrics{i}.json") as l:
+                    l = json.loads(l.read())
+
+                e = random.randint(0, len(l["lines"]) - 3)
+
+                for m in range(3):
+                    string = string + l["lines"][str(e + m)]["words"] + "\n"
+
+                btn = wx.Button(self.panel, label=string)
                 btn.Bind(wx.EVT_BUTTON, self.on_option_selected)
             else:
                 btn = wx.Button(self.panel, label=self.get_option_text(option))
@@ -308,10 +355,10 @@ class MyFrame(wx.Frame):
         if self.audio_obj and self.audio_obj.is_playing():
             self.audio_obj.stop()
         if (event.GetEventObject().option_index) == "q":
-            audio = AudioSegment.from_mp3(f"q.mp3")
+            audio = AudioSegment.from_mp3(f"temp_files/q.mp3")
         else:
             audio = AudioSegment.from_mp3(
-                f"song{event.GetEventObject().option_index}.mp3"
+                f"temp_files/song{event.GetEventObject().option_index}.mp3"
             )
         wave_obj = sa.WaveObject.from_wave_file(
             audio.export(format="wav", codec="pcm_s16le")
@@ -326,7 +373,10 @@ class MyFrame(wx.Frame):
             elif (self.dataType[0].split(";"))[x] == "1":
                 o = o[1]
             else:
-                o = o[(self.dataType[0].split(";"))[x]]
+                try:
+                    o = o[(self.dataType[0].split(";"))[x]]
+                except:
+                    return o
         return o
 
     def on_option_selected(self, event):
@@ -339,6 +389,28 @@ class MyFrame(wx.Frame):
         else:
             self.incorrect += 1
         self.next_question()
+
+    def get_lyrics(self, url, u):
+        os.system(f"syrics --directory temp_files/ {url}")
+
+        with open("temp_files/song.lrc") as f:
+            x = f.read()
+        x = x.split("\n")
+        x.remove(x[-1])
+        for i in range(4):
+            x.remove(x[0])
+        y = {"lines": {}}
+        num = 0
+        for i in x:
+            i = (str(i).replace("[", "")).split("] ")
+            z = {num: {"startTimeMs": i[0], "words": i[1]}}
+            y["lines"].update(z)
+            num = num + 1
+
+        with open(f"temp_files/lyrics{u}.json", "w") as f:
+            f.write(json.dumps(y, indent=2))
+
+        os.system("")
 
 
 if __name__ == "__main__":
